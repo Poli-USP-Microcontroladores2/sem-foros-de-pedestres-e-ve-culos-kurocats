@@ -15,25 +15,25 @@ static struct gpio_callback botao_callback;
 #define PRIORITY 5
 #define STACK_SIZE 1024
 
-<<<<<<< Updated upstream
-=======
 void pisca_verde(void);
 void pisca_amarelo(void);
 void pisca_vermelho(void);
 
 // Define as threads de controle de cada uma das cores do semáforo (verde, vermelho e amarelo, respectivamente)
-K_THREAD_DEFINE(luz_verde, STACK_SIZE, pisca_verde, NULL, NULL, NULL, PRIORITY, 0, 10);
-K_THREAD_DEFINE(luz_amarela, STACK_SIZE, pisca_amarelo, NULL, NULL, NULL, PRIORITY, 0, 20);
-K_THREAD_DEFINE(luz_vermelha, STACK_SIZE, pisca_vermelho, NULL, NULL, NULL, PRIORITY, 0, 20);
+K_THREAD_DEFINE(luz_verde, STACK_SIZE, pisca_verde, NULL, NULL, NULL, PRIORITY, 0, 20);
+K_THREAD_DEFINE(luz_amarela, STACK_SIZE, pisca_amarelo, NULL, NULL, NULL, PRIORITY, 0, 30);
+K_THREAD_DEFINE(luz_vermelha, STACK_SIZE, pisca_vermelho, NULL, NULL, NULL, PRIORITY, 0, 30);
 
 //Porta para sincronização
 #define sync_pin 4
 #define PORTA_SYNC DT_NODELABEL(gpioa)
 const struct device *sync = DEVICE_DT_GET(PORTA_SYNC);
 
->>>>>>> Stashed changes
 // Modo noturno inativo/ativo
 int noturno = 0;
+#define noturno_pin 5
+#define PORTA_NOTURNO DT_NODELABEL(gpioa)
+const struct device *nocturne = DEVICE_DT_GET(PORTA_NOTURNO);
 
 // Define o módulo de logging
 LOG_MODULE_REGISTER(semaforo_veiculos, LOG_LEVEL_INF);
@@ -55,19 +55,11 @@ int estado_semaforo = 0;
 
 void pisca_verde(){
     while(1){
-<<<<<<< Updated upstream
-        k_mutex_lock(&carros_mutex, K_FOREVER);
-
-        if(!gpio_pin_get_dt(&ledVerde)){
-            gpio_pin_set_dt(&ledVerde, 1);
-        }
-=======
         LOG_INF("Verde iniciou!\n");
         gpio_pin_set(sync, sync_pin, 1);
 
         gpio_pin_set_dt(&ledVermelho, 0);
         gpio_pin_set_dt(&ledVerde, 1);
->>>>>>> Stashed changes
 
         LOG_INF("Verde aceso!\n");
 
@@ -82,21 +74,10 @@ void pisca_verde(){
 
 void pisca_amarelo(){
     while(1){
-<<<<<<< Updated upstream
-        k_mutex_lock(&carros_mutex, K_FOREVER);
-
-        if(!gpio_pin_get_dt(&ledVerde)){
-            gpio_pin_set_dt(&ledVerde, 1);
-        }
-        if(!gpio_pin_get_dt(&ledVermelho)){
-            gpio_pin_set_dt(&ledVermelho, 1);
-        }
-=======
         LOG_INF("Amarelo iniciou!\n");
         gpio_pin_set_dt(&ledVerde, 1);
 
         gpio_pin_set_dt(&ledVermelho, 1);
->>>>>>> Stashed changes
 
         LOG_INF("Amarelo aceso!\n");
         
@@ -112,19 +93,11 @@ void pisca_amarelo(){
 
 void pisca_vermelho(){
     while(1){
-<<<<<<< Updated upstream
-        k_mutex_lock(&carros_mutex, K_FOREVER);
-
-        if(!gpio_pin_get_dt(&ledVermelho)){
-            gpio_pin_set_dt(&ledVermelho, 1);
-        }
-=======
         LOG_INF("Vermelho iniciou!\n");
         gpio_pin_set(sync, sync_pin, 0);
 
         gpio_pin_set_dt(&ledVerde, 0);
         gpio_pin_set_dt(&ledVermelho, 1);
->>>>>>> Stashed changes
 
         LOG_INF("Vermelho aceso!\n");
 
@@ -137,12 +110,6 @@ void pisca_vermelho(){
     }
 }
 
-<<<<<<< Updated upstream
-// Define as threads de controle de cada uma das cores do semáforo (verde, vermelho e amarelo, respectivamente)
-K_THREAD_DEFINE(luz_verde, STACK_SIZE, pisca_verde, NULL, NULL, NULL, PRIORITY, 0, 0);
-K_THREAD_DEFINE(luz_amarela, STACK_SIZE, pisca_amarelo, NULL, NULL, NULL, PRIORITY, 0, 10);
-K_THREAD_DEFINE(luz_vermelha, STACK_SIZE, pisca_vermelho, NULL, NULL, NULL, PRIORITY, 0, 10);
-=======
 void botao_apertado(){
     LOG_INF("Botão apertado!\n");
     k_thread_suspend(luz_verde); 
@@ -150,7 +117,6 @@ void botao_apertado(){
     k_thread_resume(luz_vermelha);
     estado_semaforo = 2;
 }
->>>>>>> Stashed changes
 
 void main(void)
 {
@@ -169,8 +135,6 @@ void main(void)
     gpio_pin_configure_dt(&ledVerde, GPIO_OUTPUT_INACTIVE);
     gpio_pin_configure_dt(&ledVermelho, GPIO_OUTPUT_INACTIVE);
 
-<<<<<<< Updated upstream
-=======
     // Verifica se a sincronização está pronta para uso
     if (!device_is_ready(sync)) {
         LOG_ERR("Os pinos de sincronização não está pronto para inicialização");
@@ -195,8 +159,8 @@ void main(void)
     gpio_pin_set(sync, sync_pin, 0);
     gpio_pin_set(nocturne, noturno_pin, 0);
 
-    // Ativa o pino do botão como input com pull-down
-    gpio_pin_configure(botao, botao_pin, GPIO_INPUT | GPIO_PULL_DOWN);
+    // Ativa o pino do botão como input com pull-up
+    gpio_pin_configure(botao, botao_pin, GPIO_INPUT | GPIO_PULL_UP);
 
     //Ativa a interrupção para a ativação do botão do semáforo
     gpio_pin_interrupt_configure(botao, botao_pin, GPIO_INT_EDGE_TO_ACTIVE);
@@ -206,19 +170,15 @@ void main(void)
     k_thread_suspend(luz_amarela);
     k_thread_suspend(luz_vermelha);
 
->>>>>>> Stashed changes
     // Condicional para se o modo noturno está ativado
     if(noturno){
+        gpio_pin_set(nocturne, noturno_pin, 1);
         LOG_INF("Modo noturno ativo... zzzzzzzzzzzz\n");
         while(1){
             k_mutex_lock(&carros_mutex, K_FOREVER);
 
-            if(!gpio_pin_get_dt(&ledVerde)){
-                gpio_pin_set_dt(&ledVerde, 1);
-            }
-            if(!gpio_pin_get_dt(&ledVermelho)){
-                gpio_pin_set_dt(&ledVermelho, 1);
-            }
+            gpio_pin_set_dt(&ledVerde, 1);
+            gpio_pin_set_dt(&ledVermelho, 1);
 
             LOG_INF("Amarelo aceso!\n");
             
