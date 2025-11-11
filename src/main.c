@@ -4,6 +4,10 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/printk.h>
 
+// LOG
+
+LOG_MODULE_REGISTER(bagulho, LOG_LEVEL_INF);
+
 // Define parâmetros para as threads concorrentes
 #define PRIORITY 5
 #define STACK_SIZE 1024
@@ -45,7 +49,7 @@ void pisca_red();
 void modo_noturno();
 
 // Define as threads de controle de cada uma das cores do semáforo (verde, vermelho e amarelo, respectivamente)
-K_THREAD_DEFINE(luz_verde, STACK_SIZE, pisca_green, NULL, NULL, NULL, PRIORITY, 0, 0);
+K_THREAD_DEFINE(luz_verde, STACK_SIZE, pisca_green, NULL, NULL, NULL, 3, 0, 0);
 K_THREAD_DEFINE(luz_vermelha, STACK_SIZE, pisca_red, NULL, NULL, NULL, PRIORITY, 0, 0);
 K_THREAD_DEFINE(thread_noturno, STACK_SIZE, modo_noturno, NULL, NULL, NULL, NOCTURNE_PRIORITY, 0, 0);
 
@@ -56,7 +60,7 @@ void pisca_green(){
         gpio_pin_set_dt(&ledVermelho, 0);
         gpio_pin_set_dt(&ledVerde, 1);
 
-        printk("Verde aceso!\n");
+        LOG_INF("Verde aceso!\n");
 
         k_msleep(4000);
 
@@ -72,7 +76,7 @@ void pisca_red(){
         gpio_pin_set_dt(&ledVerde, 0);
         gpio_pin_set_dt(&ledVermelho, 1);
 
-        printk("Vermelho aceso!\n");
+        LOG_INF("Vermelho aceso!\n");
 
         k_msleep(4000);
         
@@ -85,7 +89,7 @@ void pisca_red(){
 
 
 void botao_apertado(){
-    printk("Botão apertado!\n");
+    LOG_INF("Botão apertado!\n");
     k_thread_suspend(luz_vermelha); 
     k_thread_resume(luz_verde);
 
@@ -93,7 +97,7 @@ void botao_apertado(){
 
 
 void modo_noturno(){
-    printk("Modo noturno!\n");
+    LOG_INF("Modo noturno!\n");
     gpio_pin_set_dt(&ledVerde, 0);
     while(1){
         gpio_pin_set_dt(&ledVermelho, 1);
@@ -111,7 +115,7 @@ void interrupt_noturno(){
 
 void sincronizacao(){
 
-    printk("Sincronização!\n");
+    LOG_INF("Sincronização!\n");
     k_thread_suspend(luz_verde);
     k_thread_resume(luz_vermelha);
 
@@ -122,12 +126,12 @@ void main(void)
 
 // Verifica se os LEDs estão prontos para uso
     if (!device_is_ready(ledVerde.port)) {
-        printk("Led verde não está pronto para inicialização");
+        LOG_INF("Led verde não está pronto para inicialização");
         return;
     }
 
     if (!device_is_ready(ledVermelho.port)) {
-        printk("Led vermelho não está pronto para inicialização");
+        LOG_INF("Led vermelho não está pronto para inicialização");
         return;
     }
 
@@ -140,7 +144,7 @@ void main(void)
 
 // Verifica se a sincronização está pronta para uso
     if (!device_is_ready(sync)) {
-        printk("Pino de sincronização não está pronto para inicialização");
+        LOG_INF("Pino de sincronização não está pronto para inicialização");
         return;
     }
 
@@ -156,7 +160,7 @@ void main(void)
 
 // Verifica se o modo noturno está pronta para uso
     if (!device_is_ready(nocturne)) {
-        printk("Pino do modo noturno não está pronto para inicialização");
+        LOG_INF("Pino do modo noturno não está pronto para inicialização");
         return;
     }
 
@@ -170,7 +174,7 @@ void main(void)
 
     // Verifica se a porta do botão está pronta
     if (!device_is_ready(botao)) {
-        printk("Porta do botão não está pronta");
+        LOG_INF("Porta do botão não está pronta");
         return;
     }
 
