@@ -1,4 +1,3 @@
-
 #include <zephyr/kernel.h>
 #include <zephyr/device.h>
 #include <zephyr/drivers/gpio.h>
@@ -10,23 +9,19 @@
 #define STACK_SIZE 1024
 #define INTERRUPT_PRIORITY 2
 
-// Congiguração do GPIO ==========================================================
-
-//Porta para sincronização
+//Parâmetros para interrupção de sincronização
+#define SYNC_PRIORITY 1
 #define sync_pin 4
 #define PORTA_SYNC DT_NODELABEL(gpioa)
 const struct device *sync = DEVICE_DT_GET(PORTA_SYNC);
+static struct gpio_callback sync_callback;
 
 // Modo noturno inativo/ativo
-int noturno = 0;
+#define NOCTURNE_PRIORITY 1
 #define noturno_pin 5
 #define PORTA_NOTURNO DT_NODELABEL(gpioa)
 const struct device *nocturne = DEVICE_DT_GET(PORTA_NOTURNO);
-//=================================================================================
-
-// Criação do Mutex para pedestres 
-
-K_MUTEX_DEFINE(pedestres_mutex);
+static struct gpio_callback nocturne_callback;
 
 //Configuração do LED =========================================================
 #define LED_VERDE DT_ALIAS(led0)  // LED verde
@@ -37,15 +32,19 @@ static const struct gpio_dt_spec ledVermelho = GPIO_DT_SPEC_GET(LED_VERMELHO, gp
 
 //=============================================================================
 
+void pisca_green();
+void pisca_red();
+
+// Define as threads de controle de cada uma das cores do semáforo (verde, vermelho e amarelo, respectivamente)
+K_THREAD_DEFINE(luz_verde, STACK_SIZE, pisca_green, NULL, NULL, NULL, PRIORITY, 0, 10);
+K_THREAD_DEFINE(luz_vermelha, STACK_SIZE, pisca_red, NULL, NULL, NULL, PRIORITY, 0, 0);
+
 //Define as funções das threads de controle de cada uma das cores do semáforo
 
 void pisca_green(){
     while(1){
-        k_mutex_lock(&pedestres_mutex, K_FOREVER);
-
-        if(!gpio_pin_get_dt(&ledVerde)){
-            gpio_pin_set_dt(&ledVerde, 1);
-        }
+        gpio_pin_set_dt(&ledVermelho, 0);
+        gpio_pin_set_dt(&ledVerde, 1);
 
         printk("Verde aceso!\n");
 
@@ -53,17 +52,15 @@ void pisca_green(){
 
         gpio_pin_toggle_dt(&ledVerde);
 
-        k_mutex_unlock(&pedestres_mutex);
+        k_thread_resume(&luz_vermelha);
+        k_thread_suspend(&luz_verde);
     }
 }
 
 void pisca_red(){
     while(1){
-        k_mutex_lock(&pedestres_mutex, K_FOREVER);
-
-        if(!gpio_pin_get_dt(&ledVermelho)){
-            gpio_pin_set_dt(&ledVermelho, 1);
-        }
+        gpio_pin_set_dt(&ledVerde, 0);
+        gpio_pin_set_dt(&ledVermelho, 1);
 
         printk("Vermelho aceso!\n");
 
@@ -71,7 +68,8 @@ void pisca_red(){
         
         gpio_pin_toggle_dt(&ledVermelho);
 
-        k_mutex_unlock(&pedestres_mutex);
+        k_thread_resume(&luz_verde);
+        k_thread_suspend(&luz_vermelha);
     }
 }
 
@@ -84,64 +82,73 @@ void botao_apertado(const void *arg){
 
 }
 
-
-void sincronizacao(const void *arg){
-    // Função para tratar o evento de sincronização
-    // recebe uma flag do pino de sincronização 
-    //caso a flag for alta, o semaforo deve mudar para a luz vermelha e continuar o ciclo normalmente
-    // caso a flag for baixa, o semaforo deve mudar para a luz verde e depois continuar o ciclio normalemnte 
-    
-    int sync_state = gpio_pin_get(sync, sync_pin);
-
-    k_mutex_lock(&pedestres_mutex, K_FOREVER);
-
-    if (sync_state) {
-        // Sinal alto: muda para vermelho
+void modo_noturno(){
+    gpio_pin_set_dt(&ledVerde, 0);
+    while(1){
         gpio_pin_set_dt(&ledVermelho, 1);
-        gpio_pin_set_dt(&ledVerde, 0);
-        printk("Sincronização: Vermelho!\n");
-    } else {
-        // Sinal baixo: muda para verde
-        gpio_pin_set_dt(&ledVerde, 1);
+        k_msleep(1000);
         gpio_pin_set_dt(&ledVermelho, 0);
-        printk("Sincronização: Verde!\n");
+        k_msleep(1000);
     }
-
-    // Aguarda um tempo para manter o estado antes de liberar o mutex
-    k_msleep(4000);
-
-    k_mutex_unlock(&pedestres_mutex);
-
 }
 
 
+void sincronizacao(){
 
-// Define as threads de controle de cada uma das cores do semáforo (verde, vermelho e amarelo, respectivamente)
-K_THREAD_DEFINE(luz_verde, STACK_SIZE, pisca_green, NULL, NULL, NULL, PRIORITY, 0, 10);
-K_THREAD_DEFINE(luz_vermelha, STACK_SIZE, pisca_red, NULL, NULL, NULL, PRIORITY, 0, 0);
+    k_thread_suspend(&luz_verde);
+    k_thread_resume(&luz_vermelha);
+
+}
 
 void main(void)
 {
 
+// Verifica se os LEDs estão prontos para uso
+    if (!device_is_ready(ledVerde.port)) {
+        printk("Led verde não está pronto para inicialização");
+        return;
+    }
+
+    if (!device_is_ready(ledVermelho.port)) {
+        printk("Led vermelho não está pronto para inicialização");
+        return;
+    }
+
+// Ativa os LEDS como output inativo (ativa os LEDS em estado desligado)
+    gpio_pin_configure_dt(&ledVerde, GPIO_OUTPUT_INACTIVE);
+    gpio_pin_configure_dt(&ledVermelho, GPIO_OUTPUT_INACTIVE);
+
+
+
+
 // Verifica se a sincronização está pronta para uso
-if (!device_is_ready(sync)) {
-    return;
-}
+    if (!device_is_ready(sync)) {
+        printk("Pino de sincronização não está pronto para inicialização");
+        return;
+    }
+
+// Ativa o pino da sincronização como input com pull-up
+    gpio_pin_configure(sync, sync_pin, GPIO_INPUT | GPIO_PULL_UP);
+
+//Ativa a interrupção para a sincronização dos semáforos
+    gpio_pin_interrupt_configure(sync, sync_pin, GPIO_INT_EDGE_TO_ACTIVE);
+    gpio_init_callback(&sync_callback, botao_apertado, BIT(sync_pin));
+    gpio_add_callback(sync, &sync_callback);
+
+
 
 // Verifica se o modo noturno está pronta para uso
-if (!device_is_ready(nocturne)) {
-    return;
+    if (!device_is_ready(nocturne)) {
+        printk("Pino do modo noturno não está pronto para inicialização");
+        return;
+    }
+
+// Ativa o pino de modo noturno como input com pull-up
+    gpio_pin_configure(sync, sync_pin, GPIO_INPUT | GPIO_PULL_UP);
+
+//Ativa a interrupção para a sincronização do modo noturno
+    gpio_pin_interrupt_configure(sync, sync_pin, GPIO_INT_EDGE_TO_ACTIVE);
+    gpio_init_callback(&sync_callback, botao_apertado, BIT(sync_pin));
+    gpio_add_callback(sync, &sync_callback);
+
 }
-
-// Ativa os pinos de sincronização e modo noturno como input
-gpio_pin_configure(sync, sync_pin, GPIO_INPUT);
-gpio_pin_configure(nocturne, noturno_pin, GPIO_INPUT);
-
-// Certifique-se de que apenas uma chamada IRQ_CONNECT está ativa para PORTA_IRQn.
-// Se precisar de múltiplos handlers, utilize lógica dentro de um único handler.
-
-// Remova chamadas duplicadas de IRQ_CONNECT para o mesmo IRQ.
-IRQ_CONNECT(PORTA_IRQn, INTERRUPT_PRIORITY, sincronizacao, NULL, 0);
-
-}
-
