@@ -23,6 +23,14 @@ static struct gpio_callback sync_callback;
 const struct device *nocturne = DEVICE_DT_GET(PORTA_NOTURNO);
 static struct gpio_callback nocturne_callback;
 
+//Parâmetros para a interrupção do botão
+#define BUTTON_PRIORITY 0
+#define botao_pin 12
+#define PORTA_BOTAO DT_NODELABEL(gpioa)
+const struct device *botao = DEVICE_DT_GET(PORTA_BOTAO);
+static struct gpio_callback botao_callback;
+
+
 //Configuração do LED =========================================================
 #define LED_VERDE DT_ALIAS(led0)  // LED verde
 #define LED_VERMELHO DT_ALIAS(led2)  // LED vermelho
@@ -75,12 +83,12 @@ void pisca_red(){
 
 
 void botao_apertado(const void *arg){
-    // Função para tratar o evento de botão apertado
     printk("Botão apertado!\n");
-
-
+    k_thread_suspend(luz_vermelha); 
+    k_thread_resume(luz_verde);
 
 }
+
 
 void modo_noturno(){
     gpio_pin_set_dt(&ledVerde, 0);
@@ -151,4 +159,19 @@ void main(void)
     gpio_init_callback(&sync_callback, botao_apertado, BIT(sync_pin));
     gpio_add_callback(sync, &sync_callback);
 
+    // Verifica se a porta do botão está pronta
+    if (!device_is_ready(botao)) {
+        printk("Porta do botão não está pronta");
+        return;
+    }
+
+    // Ativa o pino do botão como input com pull-up
+    gpio_pin_configure(botao, botao_pin, GPIO_INPUT | GPIO_PULL_UP);
+
+    //Ativa a interrupção para a ativação do botão do semáforo
+    gpio_pin_interrupt_configure(botao, botao_pin, GPIO_INT_EDGE_TO_ACTIVE);
+    gpio_init_callback(&botao_callback, botao_apertado, BIT(botao_pin));
+    gpio_add_callback(botao, &botao_callback);
+
 }
+
