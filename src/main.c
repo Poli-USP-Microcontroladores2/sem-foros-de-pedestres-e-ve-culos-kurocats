@@ -18,7 +18,7 @@ static struct gpio_callback sync_callback;
 
 // Modo noturno inativo/ativo
 #define NOCTURNE_PRIORITY 1
-#define noturno_pin 5
+#define noturno_pin 1
 #define PORTA_NOTURNO DT_NODELABEL(gpioa)
 const struct device *nocturne = DEVICE_DT_GET(PORTA_NOTURNO);
 static struct gpio_callback nocturne_callback;
@@ -42,10 +42,12 @@ static const struct gpio_dt_spec ledVermelho = GPIO_DT_SPEC_GET(LED_VERMELHO, gp
 
 void pisca_green();
 void pisca_red();
+void modo_noturno();
 
 // Define as threads de controle de cada uma das cores do semáforo (verde, vermelho e amarelo, respectivamente)
 K_THREAD_DEFINE(luz_verde, STACK_SIZE, pisca_green, NULL, NULL, NULL, PRIORITY, 0, 10);
 K_THREAD_DEFINE(luz_vermelha, STACK_SIZE, pisca_red, NULL, NULL, NULL, PRIORITY, 0, 0);
+K_THREAD_DEFINE(thread_noturno, STACK_SIZE, modo_noturno, NULL, NULL, NULL, NOCTURNE_PRIORITY, 0, 0);
 
 //Define as funções das threads de controle de cada uma das cores do semáforo
 
@@ -60,8 +62,8 @@ void pisca_green(){
 
         gpio_pin_toggle_dt(&ledVerde);
 
-        k_thread_resume(&luz_vermelha);
-        k_thread_suspend(&luz_verde);
+        k_thread_resume(luz_vermelha);
+        k_thread_suspend(luz_verde);
     }
 }
 
@@ -76,13 +78,13 @@ void pisca_red(){
         
         gpio_pin_toggle_dt(&ledVermelho);
 
-        k_thread_resume(&luz_verde);
-        k_thread_suspend(&luz_vermelha);
+        k_thread_resume(luz_verde);
+        k_thread_suspend(luz_vermelha);
     }
 }
 
 
-void botao_apertado(const void *arg){
+void botao_apertado(){
     printk("Botão apertado!\n");
     k_thread_suspend(luz_vermelha); 
     k_thread_resume(luz_verde);
@@ -91,6 +93,7 @@ void botao_apertado(const void *arg){
 
 
 void modo_noturno(){
+    printk("Modo noturno!\n");
     gpio_pin_set_dt(&ledVerde, 0);
     while(1){
         gpio_pin_set_dt(&ledVermelho, 1);
@@ -100,11 +103,17 @@ void modo_noturno(){
     }
 }
 
+void interrupt_noturno(){
+    k_thread_suspend(luz_vermelha);
+    k_thread_suspend(luz_verde);
+    k_thread_resume(thread_noturno);
+}
 
 void sincronizacao(){
 
-    k_thread_suspend(&luz_verde);
-    k_thread_resume(&luz_vermelha);
+    printk("Sincronização!\n");
+    k_thread_suspend(luz_verde);
+    k_thread_resume(luz_vermelha);
 
 }
 
@@ -140,7 +149,7 @@ void main(void)
 
 //Ativa a interrupção para a sincronização dos semáforos
     gpio_pin_interrupt_configure(sync, sync_pin, GPIO_INT_EDGE_TO_ACTIVE);
-    gpio_init_callback(&sync_callback, botao_apertado, BIT(sync_pin));
+    gpio_init_callback(&sync_callback, sincronizacao, BIT(sync_pin));
     gpio_add_callback(sync, &sync_callback);
 
 
@@ -152,12 +161,12 @@ void main(void)
     }
 
 // Ativa o pino de modo noturno como input com pull-up
-    gpio_pin_configure(sync, sync_pin, GPIO_INPUT | GPIO_PULL_UP);
+    gpio_pin_configure(nocturne, noturno_pin, GPIO_INPUT | GPIO_PULL_UP);
 
 //Ativa a interrupção para a sincronização do modo noturno
-    gpio_pin_interrupt_configure(sync, sync_pin, GPIO_INT_EDGE_TO_ACTIVE);
-    gpio_init_callback(&sync_callback, botao_apertado, BIT(sync_pin));
-    gpio_add_callback(sync, &sync_callback);
+    gpio_pin_interrupt_configure(nocturne, noturno_pin, GPIO_INT_EDGE_TO_ACTIVE);
+    gpio_init_callback(&nocturne_callback, interrupt_noturno, BIT(noturno_pin));
+    gpio_add_callback(nocturne, &nocturne_callback);
 
     // Verifica se a porta do botão está pronta
     if (!device_is_ready(botao)) {
@@ -173,5 +182,6 @@ void main(void)
     gpio_init_callback(&botao_callback, botao_apertado, BIT(botao_pin));
     gpio_add_callback(botao, &botao_callback);
 
-}
+    k_thread_suspend(thread_noturno);
 
+}
