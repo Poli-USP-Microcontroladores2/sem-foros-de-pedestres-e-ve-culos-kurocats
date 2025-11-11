@@ -11,14 +11,14 @@
 
 //Parâmetros para interrupção de sincronização
 #define SYNC_PRIORITY 1
-#define sync_pin 4
+#define sync_pin 1
 #define PORTA_SYNC DT_NODELABEL(gpioa)
 const struct device *sync = DEVICE_DT_GET(PORTA_SYNC);
 static struct gpio_callback sync_callback;
 
 // Modo noturno inativo/ativo
 #define NOCTURNE_PRIORITY 1
-#define noturno_pin 1
+#define noturno_pin 5
 #define PORTA_NOTURNO DT_NODELABEL(gpioa)
 const struct device *nocturne = DEVICE_DT_GET(PORTA_NOTURNO);
 static struct gpio_callback nocturne_callback;
@@ -45,7 +45,7 @@ void pisca_red();
 void modo_noturno();
 
 // Define as threads de controle de cada uma das cores do semáforo (verde, vermelho e amarelo, respectivamente)
-K_THREAD_DEFINE(luz_verde, STACK_SIZE, pisca_green, NULL, NULL, NULL, PRIORITY, 0, 10);
+K_THREAD_DEFINE(luz_verde, STACK_SIZE, pisca_green, NULL, NULL, NULL, PRIORITY, 0, 0);
 K_THREAD_DEFINE(luz_vermelha, STACK_SIZE, pisca_red, NULL, NULL, NULL, PRIORITY, 0, 0);
 K_THREAD_DEFINE(thread_noturno, STACK_SIZE, modo_noturno, NULL, NULL, NULL, NOCTURNE_PRIORITY, 0, 0);
 
