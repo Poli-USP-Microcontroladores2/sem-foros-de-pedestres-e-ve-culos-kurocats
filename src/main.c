@@ -56,7 +56,7 @@ int estado_semaforo = 0;
 void pisca_verde(){
     while(1){
         LOG_INF("Verde iniciou!\n");
-        gpio_pin_set(sync, sync_pin, 1);
+        gpio_pin_set(sync, sync_pin, 0);
 
         gpio_pin_set_dt(&ledVermelho, 0);
         gpio_pin_set_dt(&ledVerde, 1);
@@ -94,7 +94,7 @@ void pisca_amarelo(){
 void pisca_vermelho(){
     while(1){
         LOG_INF("Vermelho iniciou!\n");
-        gpio_pin_set(sync, sync_pin, 0);
+        gpio_pin_set(sync, sync_pin, 1);
 
         gpio_pin_set_dt(&ledVerde, 0);
         gpio_pin_set_dt(&ledVermelho, 1);
@@ -172,7 +172,7 @@ void main(void)
 
     // Condicional para se o modo noturno está ativado
     if(noturno){
-        gpio_pin_set(nocturne, noturno_pin, 1);
+        gpio_pin_set(nocturne, noturno_pin, 0);
         LOG_INF("Modo noturno ativo... zzzzzzzzzzzz\n");
         while(1){
             k_mutex_lock(&carros_mutex, K_FOREVER);
