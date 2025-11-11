@@ -25,7 +25,7 @@ K_THREAD_DEFINE(luz_amarela, STACK_SIZE, pisca_amarelo, NULL, NULL, NULL, PRIORI
 K_THREAD_DEFINE(luz_vermelha, STACK_SIZE, pisca_vermelho, NULL, NULL, NULL, PRIORITY, 0, 30);
 
 //Porta para sincronização
-#define sync_pin 4
+#define sync_pin 1
 #define PORTA_SYNC DT_NODELABEL(gpioa)
 const struct device *sync = DEVICE_DT_GET(PORTA_SYNC);
 
@@ -56,6 +56,7 @@ int estado_semaforo = 0;
 void pisca_verde(){
     while(1){
         LOG_INF("Verde iniciou!\n");
+        gpio_pin_set(sync, sync_pin, 1);
         gpio_pin_set(sync, sync_pin, 0);
 
         gpio_pin_set_dt(&ledVermelho, 0);
@@ -94,7 +95,6 @@ void pisca_amarelo(){
 void pisca_vermelho(){
     while(1){
         LOG_INF("Vermelho iniciou!\n");
-        gpio_pin_set(sync, sync_pin, 1);
 
         gpio_pin_set_dt(&ledVerde, 0);
         gpio_pin_set_dt(&ledVermelho, 1);
@@ -154,7 +154,7 @@ void main(void)
     }
 
     //Ativa os pinos de sincronização e modo noturno como output
-    gpio_pin_configure(sync, sync_pin, GPIO_OUTPUT);
+    gpio_pin_configure(sync, sync_pin, GPIO_OUTPUT_INACTIVE);
     gpio_pin_configure(nocturne, noturno_pin, GPIO_OUTPUT);
     gpio_pin_set(sync, sync_pin, 0);
     gpio_pin_set(nocturne, noturno_pin, 0);
