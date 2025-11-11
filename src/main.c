@@ -18,11 +18,13 @@ static struct gpio_callback botao_callback;
 void pisca_verde(void);
 void pisca_amarelo(void);
 void pisca_vermelho(void);
+void modo_noturno(void);
 
 // Define as threads de controle de cada uma das cores do semáforo (verde, vermelho e amarelo, respectivamente)
 K_THREAD_DEFINE(luz_verde, STACK_SIZE, pisca_verde, NULL, NULL, NULL, PRIORITY, 0, 20);
 K_THREAD_DEFINE(luz_amarela, STACK_SIZE, pisca_amarelo, NULL, NULL, NULL, PRIORITY, 0, 30);
 K_THREAD_DEFINE(luz_vermelha, STACK_SIZE, pisca_vermelho, NULL, NULL, NULL, PRIORITY, 0, 30);
+K_THREAD_DEFINE(noite_noturna, STACK_SIZE, modo_noturno, NULL, NULL, NULL, -1, 0, 30);
 
 //Porta para sincronização
 #define sync_pin 1
@@ -57,10 +59,9 @@ void pisca_verde(){
     while(1){
         LOG_INF("Verde iniciou!\n");
         gpio_pin_set(sync, sync_pin, 1);
-        gpio_pin_set(sync, sync_pin, 0);
-
         gpio_pin_set_dt(&ledVermelho, 0);
         gpio_pin_set_dt(&ledVerde, 1);
+        gpio_pin_set(sync, sync_pin, 0);
 
         LOG_INF("Verde aceso!\n");
 
@@ -107,6 +108,33 @@ void pisca_vermelho(){
         k_thread_resume(luz_verde);
         estado_semaforo = 0;
         k_thread_suspend(luz_vermelha);
+    }
+}
+
+void modo_noturno(){
+    if(noturno){
+        gpio_pin_set(nocturne, noturno_pin, 0);
+        LOG_INF("Modo noturno ativo... zzzzzzzzzzzz\n");
+        while(1){
+            k_mutex_lock(&carros_mutex, K_FOREVER);
+
+            gpio_pin_set_dt(&ledVerde, 1);
+            gpio_pin_set_dt(&ledVermelho, 1);
+
+            LOG_INF("Amarelo aceso!\n");
+            
+            k_msleep(1000);
+
+            gpio_pin_set_dt(&ledVerde, 0);
+            gpio_pin_set_dt(&ledVermelho, 0);
+
+            LOG_INF("Amarelo apagado!\n");
+
+            k_msleep(1000);
+
+        }
+    } else {
+        k_yield();
     }
 }
 
@@ -169,28 +197,5 @@ void main(void)
 
     k_thread_suspend(luz_amarela);
     k_thread_suspend(luz_vermelha);
-
-    // Condicional para se o modo noturno está ativado
-    if(noturno){
-        gpio_pin_set(nocturne, noturno_pin, 0);
-        LOG_INF("Modo noturno ativo... zzzzzzzzzzzz\n");
-        while(1){
-            k_mutex_lock(&carros_mutex, K_FOREVER);
-
-            gpio_pin_set_dt(&ledVerde, 1);
-            gpio_pin_set_dt(&ledVermelho, 1);
-
-            LOG_INF("Amarelo aceso!\n");
-            
-            k_msleep(1000);
-
-            gpio_pin_toggle_dt(&ledVerde);
-            gpio_pin_toggle_dt(&ledVermelho);
-
-            LOG_INF("Amarelo apagado!\n");
-
-            k_msleep(1000);
-
-        }
-    }
+    
 }
